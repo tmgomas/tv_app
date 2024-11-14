@@ -1,101 +1,323 @@
-import Image from "next/image";
+'use client'
+
+import React, { useState, useEffect } from 'react';
+import { PlayCircle, Image as ImageIcon, X, Plus, Youtube, Trash2, Maximize, Minimize } from 'lucide-react';
+
+interface SavedLink {
+  url: string;
+  videoId: string;
+  timestamp: string;
+}
+
+const Button = ({ children, variant = 'default', size = 'default', className = '', ...props }) => {
+  const baseStyles = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none';
+  
+  const variants = {
+    default: 'bg-blue-600 text-white hover:bg-blue-700',
+    outline: 'border border-gray-200 bg-white hover:bg-gray-100 text-gray-900',
+    secondary: 'bg-gray-100 text-gray-900 hover:bg-gray-200',
+  };
+
+  const sizes = {
+    default: 'h-10 py-2 px-4',
+    sm: 'h-9 px-3 text-sm',
+    lg: 'h-11 px-8',
+    icon: 'h-10 w-10',
+  };
+
+  return (
+    <button className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`} {...props}>
+      {children}
+    </button>
+  );
+};
+
+const Input = ({ className = '', ...props }) => (
+  <input
+    className={`flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+    {...props}
+  />
+);
+
+const Card = ({ children, className = '', onClick }) => (
+  <div 
+    className={`rounded-lg border bg-white shadow-sm ${onClick ? 'cursor-pointer' : ''} ${className}`}
+    onClick={onClick}
+  >
+    {children}
+  </div>
+);
+
+const CardContent = ({ children, className = '' }) => (
+  <div className={`p-6 ${className}`}>{children}</div>
+);
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [savedLinks, setSavedLinks] = useState<SavedLink[]>([]);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [isGridView, setIsGridView] = useState(true);
+  const [showOverlay, setShowOverlay] = useState(false);
+  let overlayTimeout: NodeJS.Timeout;
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  useEffect(() => {
+    const stored = localStorage.getItem('youtube-links');
+    if (stored) {
+      setSavedLinks(JSON.parse(stored));
+    }
+
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'F11') {
+        handleFullScreen();
+      } else if (e.key === 'Escape' && isFullScreen) {
+        exitFullScreen();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [isFullScreen]);
+
+  const handleFullScreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        setIsFullScreen(true);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+    }
+  };
+
+  const exitFullScreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+      setIsFullScreen(false);
+      setShowOverlay(false);
+    } catch (err) {
+      console.error('Error:', err);
+    }
+  };
+
+  const handleMouseMove = () => {
+    setShowOverlay(true);
+    clearTimeout(overlayTimeout);
+    overlayTimeout = setTimeout(() => {
+      setShowOverlay(false);
+    }, 3000);
+  };
+
+  const getVideoId = (url: string): string | null => {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  };
+
+  const handleSaveLink = () => {
+    const videoId = getVideoId(youtubeUrl);
+    if (videoId) {
+      const newLink = {
+        url: youtubeUrl,
+        videoId,
+        timestamp: new Date().toLocaleString()
+      };
+      const updatedLinks = [...savedLinks, newLink];
+      setSavedLinks(updatedLinks);
+      localStorage.setItem('youtube-links', JSON.stringify(updatedLinks));
+      setYoutubeUrl('');
+      setShowAddForm(false);
+    }
+  };
+
+  const handlePlayVideo = (videoId: string) => {
+    setSelectedVideoId(videoId);
+    handleFullScreen();
+  };
+
+  const handleDeleteLink = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updatedLinks = savedLinks.filter((_, i) => i !== index);
+    setSavedLinks(updatedLinks);
+    localStorage.setItem('youtube-links', JSON.stringify(updatedLinks));
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+      {isFullScreen && selectedVideoId ? (
+        <div 
+          className="fixed inset-0 bg-black z-50"
+          onMouseMove={handleMouseMove}
+          onTouchStart={handleMouseMove}
+        >
+          <iframe
+            src={`https://www.youtube.com/embed/${selectedVideoId}?autoplay=1`}
+            className="w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+          
+          <div 
+            className={`fixed inset-x-0 top-0 p-4 transition-transform duration-300 ${
+              showOverlay ? 'translate-y-0' : '-translate-y-full'
+            }`}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 max-w-7xl mx-auto">
+              {savedLinks.map((link, index) => (
+                <button
+                  key={index}
+                  className="relative group aspect-video bg-black rounded-lg overflow-hidden hover:ring-2 hover:ring-white/50 transition"
+                  onClick={() => {
+                    setSelectedVideoId(link.videoId);
+                    setShowOverlay(false);
+                  }}
+                >
+                  <img
+                    src={`https://img.youtube.com/vi/${link.videoId}/mqdefault.jpg`}
+                    alt=""
+                    className="w-full h-full object-cover group-hover:opacity-75 transition"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <PlayCircle className="w-8 h-8 text-white" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="fixed top-4 right-4 z-50 bg-black/50 text-white border-white/20 hover:bg-white/20"
+            onClick={exitFullScreen}
           >
-            Read our docs
-          </a>
+            <X className="w-4 h-4" />
+          </Button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      ) : (
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">My Videos</h1>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setIsGridView(!isGridView)}
+              >
+                {isGridView ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+              </Button>
+              <Button
+                onClick={() => setShowAddForm(!showAddForm)}
+                size="icon"
+                className="rounded-full"
+              >
+                {showAddForm ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+              </Button>
+            </div>
+          </div>
+
+          {showAddForm && (
+            <Card className="mb-6">
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Youtube className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <Input
+                      type="text"
+                      className="pl-10"
+                      placeholder="Paste YouTube URL"
+                      value={youtubeUrl}
+                      onChange={(e) => setYoutubeUrl(e.target.value)}
+                    />
+                  </div>
+                  <Button 
+                    className="w-full"
+                    onClick={handleSaveLink}
+                    disabled={!youtubeUrl}
+                  >
+                    Save Video
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {isGridView ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {savedLinks.map((link, index) => (
+                <Card
+                  key={index}
+                  className="group overflow-hidden hover:shadow-lg transition-shadow"
+                  onClick={() => handlePlayVideo(link.videoId)}
+                >
+                  <div className="relative aspect-video">
+                    <img
+                      src={`https://img.youtube.com/vi/${link.videoId}/mqdefault.jpg`}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <PlayCircle className="w-12 h-12 text-white" />
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-500">{link.timestamp}</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                        onClick={(e) => handleDeleteLink(index, e)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-900 truncate">{link.url}</p>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {savedLinks.map((link, index) => (
+                <Card
+                  key={index}
+                  className="overflow-hidden hover:shadow-lg transition-shadow"
+                  onClick={() => handlePlayVideo(link.videoId)}
+                >
+                  <div className="p-4 flex items-center gap-4">
+                    <div className="relative w-40 flex-shrink-0 aspect-video">
+                      <img
+                        src={`https://img.youtube.com/vi/${link.videoId}/mqdefault.jpg`}
+                        alt=""
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <PlayCircle className="w-10 h-10 text-white/75" />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-500">{link.timestamp}</p>
+                      <p className="mt-1 text-sm text-gray-900 truncate">{link.url}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-shrink-0 text-red-600 hover:text-red-700"
+                      onClick={(e) => handleDeleteLink(index, e)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
