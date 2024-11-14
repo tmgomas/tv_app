@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import { PlayCircle, Image as ImageIcon, X, Plus, Youtube, Trash2, Maximize, Minimize } from 'lucide-react';
+
+import { PlayCircle, Image as  X, Plus, Youtube, Trash2, Maximize, Minimize } from 'lucide-react';
 
 interface SavedLink {
   url: string;
